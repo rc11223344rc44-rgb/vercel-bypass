@@ -1,7 +1,7 @@
 const axios = require('axios');
+const qs = require('qs'); // URL encoding ke liye standard library
 
 module.exports = async (req, res) => {
-    // Vercel me sirf POST requests allow karne ke liye
     if (req.method !== 'POST') {
         return res.status(405).json({ status: false, reason: "Method Not Allowed" });
     }
@@ -9,20 +9,39 @@ module.exports = async (req, res) => {
     try {
         const targetUrl = 'http://adminpanel1.free.je/connect';
         
-        // Axios ke jariye browser headers ke sath InfinityFree ko request forward karte hain
-        const response = await axios.post(targetUrl, req.body, {
+        // Loader se aaye data ko proper application/x-www-form-urlencoded string me badalna
+        const formData = qs.stringify(req.body);
+
+        const response = await axios.post(targetUrl, formData, {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'application/json'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept': 'application/json, text/html, */*'
             },
-            timeout: 8000 // 8 seconds timeout
+            timeout: 10000
         });
 
-        // Asli panel ka response loader ko wapas de do
-        return res.status(200).json(response.data);
+        let responseData = response.data;
+
+        // Check karo agar abhi bhi panel HTML error bhej raha hai
+        if (typeof responseData === 'string' && responseData.includes('<!DOCTYPE html>')) {
+            return res.status(200).json({ 
+                status: false, 
+                reason: "Panel rejected formatting. Verification failed on host side." 
+            });
+        }
+
+        // Agar response string me JSON hai toh object banao
+        if (typeof responseData === 'string') {
+            try {
+                responseData = JSON.parse(responseData);
+            } catch (e) {
+                return res.status(200).json({ status: false, reason: "Invalid response structure from panel." });
+            }
+        }
+
+        return res.status(200).json(responseData);
     } catch (error) {
-        // Agar InfinityFree side se koi dikkat aaye toh error response bhej do
-        return res.status(500).json({ status: false, reason: "Bypass Proxy Error: " + error.message });
+        return res.status(200).json({ status: false, reason: "Bypass Proxy Error: " + error.message });
     }
 };
